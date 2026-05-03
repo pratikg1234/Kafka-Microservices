@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,9 @@ public class OrderService {
         Order order = new Order();
         order.setUserId(request.getUserId());
         order.setStatus(OrderStatus.PENDING);
+        order.setAmount(BigDecimal.ZERO);
         order.setCreatedAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
 
         List<OrderItem> items = request.getItems().stream().map(i -> {
             OrderItem item = new OrderItem();
@@ -100,6 +103,7 @@ public class OrderService {
         }
 
         order.setStatus(status);
+        order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
 
         log.info("Order {} updated to {}", orderId, status);
