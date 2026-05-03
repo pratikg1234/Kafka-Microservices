@@ -27,6 +27,14 @@ public class Order {
 
     private BigDecimal amount;
 
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -71,14 +79,6 @@ public class Order {
         this.createdAt = createdAt;
     }
 
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
@@ -86,4 +86,6 @@ public class Order {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+
 }

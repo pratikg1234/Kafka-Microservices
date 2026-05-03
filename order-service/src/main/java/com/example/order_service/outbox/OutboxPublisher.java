@@ -32,7 +32,7 @@ public class OutboxPublisher {
                         event.getEventType(),
                         event.getAggregateId().toString(),
                         event.getPayload()
-                );
+                ).get();
 
                 event.setStatus("SENT");
                 outboxRepository.save(event);
