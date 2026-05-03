@@ -26,6 +26,8 @@ public class Order {
 
     private LocalDateTime createdAt;
 
+    private LocalDateTime updatedAt;
+
     public Long getId() {
         return id;
     }
@@ -74,5 +76,5 @@ public class Order {
         this.updatedAt = updatedAt;
     }
 
-    private LocalDateTime updatedAt;
+
 }
