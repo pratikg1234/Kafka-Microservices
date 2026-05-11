@@ -1,26 +1,31 @@
 package com.example.user_service.service;
 
 import com.example.user_service.model.dto.CreateUserRequest;
+import com.example.user_service.model.dto.LoginRequest;
 import com.example.user_service.model.dto.UpdateUserRequest;
 import com.example.user_service.model.dto.UserResponse;
 import com.example.user_service.model.dto.PaginatedResponse;
 import com.example.user_service.model.entity.User;
 import com.example.user_service.model.entity.UserAuditLog;
+import com.example.user_service.exception.InvalidCredentialsException;
 import com.example.user_service.exception.UserAlreadyExistsException;
 import com.example.user_service.exception.ResourceNotFoundException;
 import com.example.user_service.repository.UserRepository;
 import com.example.user_service.repository.UserAuditLogRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -36,7 +41,14 @@ public class UserService {
     @Autowired
     private OutboxPublisher outboxPublisher;
     
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    @Autowired
+    private BCryptPasswordEncoder passwordEncoder;
+    
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    @Value("${notification-service.url:http://localhost:8082/api}")
+    private String notificationServiceUrl;
     
     public UserResponse createUser(CreateUserRequest request, String ipAddress) {
         log.info("Creating new user with username: {}", request.getUsername());
@@ -67,13 +79,40 @@ public class UserService {
         User savedUser = userRepository.save(user);
         
         // Audit log
-//        createAuditLog(savedUser.getUserId(), UserAuditLog.AuditAction.CREATED, ipAddress);
+        createAuditLog(savedUser.getUserId(), UserAuditLog.AuditAction.CREATED, ipAddress);
         
-        // Publish OTP_REQUESTED event
+        // Publish USER_REGISTERED event (triggers welcome email)
+        outboxPublisher.publishUserRegisteredEvent(savedUser.getUserId(), savedUser.getUsername(), savedUser.getEmail());
+        
+        // Publish OTP_REQUESTED event (triggers OTP for account verification)
         outboxPublisher.publishOtpRequestedEvent(savedUser.getUserId(), savedUser.getEmail(), savedUser.getPhoneNumber());
         
         log.info("User created successfully with ID: {}", savedUser.getUserId());
         return mapToUserResponse(savedUser);
+    }
+    
+    public UserResponse loginUser(LoginRequest request, String ipAddress) {
+        log.info("Login attempt for: {}", request.getUsernameOrEmail());
+        
+        // Find user by username or email
+        User user = userRepository.findByUsername(request.getUsernameOrEmail())
+                .or(() -> userRepository.findByEmail(request.getUsernameOrEmail()))
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid username/email or password"));
+        
+        // Check account status
+        if (user.getAccountStatus() != User.AccountStatus.ACTIVE) {
+            throw new InvalidCredentialsException("Account is " + user.getAccountStatus().name().toLowerCase());
+        }
+        
+        // Verify password
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            createAuditLog(user.getUserId(), UserAuditLog.AuditAction.LOGIN_FAILED, ipAddress);
+            throw new InvalidCredentialsException("Invalid username/email or password");
+        }
+        
+        createAuditLog(user.getUserId(), UserAuditLog.AuditAction.LOGIN, ipAddress);
+        log.info("User logged in successfully: {}", user.getUserId());
+        return mapToUserResponse(user);
     }
     
     public UserResponse getUserById(String userId) {
@@ -134,7 +173,7 @@ public class UserService {
         return mapToUserResponse(updatedUser);
     }
     
-    public void resetPassword(String userId, String newPassword, String ipAddress) {
+    public void resetPassword(String userId, String ipAddress) {
         log.info("Resetting password for user ID: {}", userId);
         
         User user = userRepository.findById(userId)
@@ -147,16 +186,35 @@ public class UserService {
         log.info("Password reset event published for user ID: {}", userId);
     }
     
-    public void confirmPasswordReset(String userId, String newPassword) {
+    public void confirmPasswordReset(String userId, String otpCode, String newPassword, String ipAddress) {
         log.info("Confirming password reset for user ID: {}", userId);
         
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
         
+        // Verify OTP via notification-service
+        boolean otpVerified = verifyOtpWithNotificationService(userId, otpCode);
+        if (!otpVerified) {
+            throw new InvalidCredentialsException("Invalid or expired OTP code");
+        }
+        
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         
+        createAuditLog(userId, UserAuditLog.AuditAction.PASSWORD_RESET_CONFIRMED, ipAddress);
         log.info("Password reset confirmed for user ID: {}", userId);
+    }
+    
+    private boolean verifyOtpWithNotificationService(String userId, String otpCode) {
+        try {
+            String url = notificationServiceUrl + "/notifications/otp/verify?userId=" + userId + "&otpCode=" + otpCode;
+            var response = restTemplate.postForEntity(url, null, Map.class);
+            return response.getStatusCode().is2xxSuccessful() 
+                    && Boolean.TRUE.equals(response.getBody() != null ? response.getBody().get("verified") : false);
+        } catch (Exception e) {
+            log.error("Failed to verify OTP with notification-service for user: {}", userId, e);
+            return false;
+        }
     }
     
     public void updateAccountAgeForAllUsers() {

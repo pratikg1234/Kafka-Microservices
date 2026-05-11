@@ -2,6 +2,8 @@ package com.example.user_service.kafka;
 
 import com.example.user_service.model.entity.OutboxEvent;
 import com.example.user_service.repository.OutboxEventRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -23,15 +25,15 @@ public class OutboxEventPoller {
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
     
+    @Autowired
+    private ObjectMapper objectMapper;
+    
     @Transactional
     public void pollAndPublishUnpublishedEvents() {
         log.debug("Polling for unpublished outbox events");
         
         try {
-
-            log.info("trying to findby published false method again");
             List<OutboxEvent> unpublishedEvents = outboxEventRepository.findByPublishedFalseOrderByCreatedAtAsc();
-            log.info("pass!!");
             if (unpublishedEvents.isEmpty()) {
                 log.debug("No unpublished events found");
                 return;
@@ -46,7 +48,6 @@ public class OutboxEventPoller {
                     // Mark as published
                     event.setPublished(true);
                     event.setPublishedAt(LocalDateTime.now());
-                    log.info("showing event type = {}", event.getEventType());
                     outboxEventRepository.save(event);
                     
                     log.info("Event published to Kafka - EventId: {}, Type: {}", event.getEventId(), event.getEventType());
@@ -63,15 +64,18 @@ public class OutboxEventPoller {
     private void publishEventToKafka(OutboxEvent event) {
         log.debug("Publishing event to Kafka - EventId: {}, Type: {}", event.getEventId(), event.getEventType());
         
-        String message = String.format(
-                "{\"eventId\":\"%s\",\"eventType\":\"%s\",\"aggregateId\":\"%s\",\"payload\":%s,\"timestamp\":\"%s\"}",
-                event.getEventId(),
-                event.getEventType(),
-                event.getAggregateId(),
-                event.getPayload(),
-                LocalDateTime.now()
-        );
-        
-        kafkaTemplate.send(KAFKA_TOPIC, event.getAggregateId(), message);
+        try {
+            ObjectNode messageNode = objectMapper.createObjectNode();
+            messageNode.put("eventId", event.getEventId());
+            messageNode.put("eventType", event.getEventType().name());
+            messageNode.put("aggregateId", event.getAggregateId());
+            messageNode.set("payload", objectMapper.readTree(event.getPayload()));
+            messageNode.put("timestamp", LocalDateTime.now().toString());
+            
+            String message = objectMapper.writeValueAsString(messageNode);
+            kafkaTemplate.send(KAFKA_TOPIC, event.getAggregateId(), message);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize outbox event: " + event.getEventId(), e);
+        }
     }
 }

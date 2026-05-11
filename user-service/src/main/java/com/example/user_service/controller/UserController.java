@@ -44,6 +44,25 @@ public class UserController {
                         .build());
     }
     
+    @PostMapping("/login")
+    @Operation(summary = "Login with username/email and password")
+    public ResponseEntity<ApiResponse<UserResponse>> loginUser(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        log.info("Login request received for: {}", request.getUsernameOrEmail());
+        
+        String ipAddress = getClientIpAddress(httpRequest);
+        UserResponse userResponse = userService.loginUser(request, ipAddress);
+        
+        return ResponseEntity.ok(ApiResponse.<UserResponse>builder()
+                .success(true)
+                .message("Login successful")
+                .data(userResponse)
+                .timestamp(LocalDateTime.now())
+                .correlationId(MDC.get("correlationId"))
+                .build());
+    }
+    
     @GetMapping("/{userId}")
     @Operation(summary = "Get user by ID")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable String userId) {
@@ -106,7 +125,7 @@ public class UserController {
         log.info("Password reset request for userId: {}", userId);
         
         String ipAddress = getClientIpAddress(httpRequest);
-        userService.resetPassword(userId, "", ipAddress);
+        userService.resetPassword(userId, ipAddress);
         
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)
@@ -117,13 +136,15 @@ public class UserController {
     }
     
     @PostMapping("/{userId}/confirm-password-reset")
-    @Operation(summary = "Confirm password reset with new password")
+    @Operation(summary = "Confirm password reset with OTP and new password")
     public ResponseEntity<ApiResponse<Object>> confirmPasswordReset(
             @PathVariable String userId,
-            @Valid @RequestBody PasswordResetRequest request) {
+            @Valid @RequestBody PasswordResetRequest request,
+            HttpServletRequest httpRequest) {
         log.info("Confirm password reset for userId: {}", userId);
         
-        userService.confirmPasswordReset(userId, request.getNewPassword());
+        String ipAddress = getClientIpAddress(httpRequest);
+        userService.confirmPasswordReset(userId, request.getOtpCode(), request.getNewPassword(), ipAddress);
         
         return ResponseEntity.ok(ApiResponse.builder()
                 .success(true)

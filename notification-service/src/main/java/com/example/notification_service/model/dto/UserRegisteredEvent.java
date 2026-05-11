@@ -9,14 +9,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class BirthdayWishEvent {
+public class UserRegisteredEvent {
     
     private String eventId;
     private String eventType;
-    private String aggregateId; // userId
     private String userId;
-    private String email;
     private String username;
-    private Integer age;
-    private Long timestamp;
+    private String email;
 }

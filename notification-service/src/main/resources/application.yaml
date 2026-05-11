@@ -49,17 +49,17 @@ spring:
         spring.json.trusted.packages: "*"
 
   # Redis Configuration
-    data:
-      redis:
-        host: redis
-        port: 6379
-        timeout: 60000
-        jedis:
-          pool:
-            max-active: 20
-            max-idle: 10
-            min-idle: 5
-            max-wait: -1ms
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+      timeout: 60000
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: -1ms
 
   # Mail Configuration (Gmail SMTP)
   mail:
@@ -133,7 +133,7 @@ management:
       simple:
         enabled: true
 
-# Springdoc OpenAPI (Swagger UI)
+# SpringDoc / Swagger Configuration
 springdoc:
   api-docs:
     path: /v3/api-docs
