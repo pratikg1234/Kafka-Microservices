@@ -91,7 +91,7 @@ public class UserService {
         return mapToUserResponse(savedUser);
     }
     
-    public UserResponse loginUser(LoginRequest request, String ipAddress) {
+    public String loginUser(LoginRequest request, String ipAddress) {
         log.info("Login attempt for: {}", request.getUsernameOrEmail());
         
         // Find user by username or email
@@ -110,8 +110,29 @@ public class UserService {
             throw new InvalidCredentialsException("Invalid username/email or password");
         }
         
+        // Credentials valid — send OTP via Kafka for 2FA
+        outboxPublisher.publishOtpRequestedEvent(user.getUserId(), user.getEmail(), user.getPhoneNumber());
+        
         createAuditLog(user.getUserId(), UserAuditLog.AuditAction.LOGIN, ipAddress);
-        log.info("User logged in successfully: {}", user.getUserId());
+        log.info("Credentials verified for user: {}. OTP sent for 2FA.", user.getUserId());
+        return user.getUserId();
+    }
+    
+    public UserResponse verifyLoginOtp(String userId, String otpCode, String ipAddress) {
+        log.info("Verifying login OTP for user: {}", userId);
+        
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+        
+        // Verify OTP via notification-service (synchronous — need immediate yes/no)
+        boolean otpVerified = verifyOtpWithNotificationService(userId, otpCode);
+        if (!otpVerified) {
+            createAuditLog(userId, UserAuditLog.AuditAction.LOGIN_FAILED, ipAddress);
+            throw new InvalidCredentialsException("Invalid or expired OTP code");
+        }
+        
+        createAuditLog(userId, UserAuditLog.AuditAction.LOGIN_OTP_VERIFIED, ipAddress);
+        log.info("Login OTP verified successfully for user: {}", userId);
         return mapToUserResponse(user);
     }
     

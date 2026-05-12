@@ -14,6 +14,7 @@ import org.slf4j.MDC;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -45,14 +46,33 @@ public class UserController {
     }
     
     @PostMapping("/login")
-    @Operation(summary = "Login with username/email and password")
-    public ResponseEntity<ApiResponse<UserResponse>> loginUser(
+    @Operation(summary = "Step 1: Login with credentials — triggers OTP for 2FA")
+    public ResponseEntity<ApiResponse<Map<String, String>>> loginUser(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
         log.info("Login request received for: {}", request.getUsernameOrEmail());
         
         String ipAddress = getClientIpAddress(httpRequest);
-        UserResponse userResponse = userService.loginUser(request, ipAddress);
+        String userId = userService.loginUser(request, ipAddress);
+        
+        return ResponseEntity.ok(ApiResponse.<Map<String, String>>builder()
+                .success(true)
+                .message("Credentials verified. OTP has been sent to your email and phone. Use /login/verify-otp to complete login.")
+                .data(Map.of("userId", userId))
+                .timestamp(LocalDateTime.now())
+                .correlationId(MDC.get("correlationId"))
+                .build());
+    }
+    
+    @PostMapping("/login/verify-otp")
+    @Operation(summary = "Step 2: Verify OTP to complete login")
+    public ResponseEntity<ApiResponse<UserResponse>> verifyLoginOtp(
+            @Valid @RequestBody LoginOtpVerifyRequest request,
+            HttpServletRequest httpRequest) {
+        log.info("Login OTP verification request for userId: {}", request.getUserId());
+        
+        String ipAddress = getClientIpAddress(httpRequest);
+        UserResponse userResponse = userService.verifyLoginOtp(request.getUserId(), request.getOtpCode(), ipAddress);
         
         return ResponseEntity.ok(ApiResponse.<UserResponse>builder()
                 .success(true)
