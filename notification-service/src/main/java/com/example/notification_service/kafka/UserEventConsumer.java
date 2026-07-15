@@ -2,6 +2,7 @@ package com.example.notification_service.kafka;
 
 import com.example.notification_service.model.dto.OtpRequestedEvent;
 import com.example.notification_service.model.dto.BirthdayWishEvent;
+import com.example.notification_service.model.dto.UserRegisteredEvent;
 import com.example.notification_service.model.entity.ProcessedEvent;
 import com.example.notification_service.repository.ProcessedEventRepository;
 import com.example.notification_service.service.NotificationService;
@@ -45,14 +46,36 @@ public class UserEventConsumer {
             }
             
             switch (eventType) {
+                case "USER_REGISTERED" -> handleUserRegisteredEvent(message, eventId);
                 case "OTP_REQUESTED", "PASSWORD_RESET_REQUESTED" -> handleOtpRequestedEvent(message, eventId);
                 case "BIRTHDAY_WISH_REQUESTED" -> handleBirthdayWishEvent(message, eventId);
                 default -> log.warn("Unknown event type: {}", eventType);
             }
             
         } catch (Exception e) {
-            log.error("Error processing Kafka message", e);
+            log.error("Error processing Kafka message. EventId extraction attempted. Message: {}", message, e);
+            throw e; // Re-throw to trigger Kafka retry/DLQ mechanism
         }
+    }
+    
+    private void handleUserRegisteredEvent(String message, String eventId) throws Exception {
+        log.info("Processing USER_REGISTERED event: {}", eventId);
+        
+        var messageJson = objectMapper.readTree(message);
+        String payloadStr = messageJson.get("payload").toString();
+        var payloadJson = objectMapper.readTree(payloadStr);
+        
+        UserRegisteredEvent event = UserRegisteredEvent.builder()
+                .eventId(eventId)
+                .eventType(messageJson.get("eventType").asText())
+                .userId(messageJson.get("aggregateId").asText())
+                .username(payloadJson.get("username").asText())
+                .email(payloadJson.get("email").asText())
+                .build();
+        
+        notificationService.handleUserRegisteredEvent(event);
+        
+        markEventAsProcessed(eventId, "USER_REGISTERED");
     }
     
     private void handleOtpRequestedEvent(String message, String eventId) throws Exception {
@@ -81,12 +104,15 @@ public class UserEventConsumer {
         
         var messageJson = objectMapper.readTree(message);
         String payloadStr = messageJson.get("payload").toString();
+        var payloadJson = objectMapper.readTree(payloadStr);
         
         BirthdayWishEvent event = BirthdayWishEvent.builder()
                 .eventId(eventId)
                 .eventType(messageJson.get("eventType").asText())
                 .userId(messageJson.get("aggregateId").asText())
-                .email(objectMapper.readTree(payloadStr).get("email").asText())
+                .email(payloadJson.get("email").asText())
+                .username(payloadJson.has("username") ? payloadJson.get("username").asText() : null)
+                .age(payloadJson.has("age") ? payloadJson.get("age").asInt() : null)
                 .build();
         
         notificationService.handleBirthdayWishEvent(event);
@@ -105,7 +131,3 @@ public class UserEventConsumer {
         log.info("Event marked as processed: {}", eventId);
     }
 }
-
-
-
-

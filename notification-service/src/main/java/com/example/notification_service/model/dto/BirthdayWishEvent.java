@@ -16,5 +16,7 @@ public class BirthdayWishEvent {
     private String aggregateId; // userId
     private String userId;
     private String email;
+    private String username;
+    private Integer age;
     private Long timestamp;
 }

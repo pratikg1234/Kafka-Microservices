@@ -8,12 +8,13 @@ RUN mvn clean package -DskipTests
 
 # Runtime stage
 FROM eclipse-temurin:17-jre-alpine
+RUN apk add --no-cache wget
 WORKDIR /app
 COPY --from=builder /app/target/*.jar app.jar
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD java -cp /app/app.jar org.springframework.boot.loader.JarLauncher
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD wget -q --spider http://localhost:8082/api/actuator/health || exit 1
 
 EXPOSE 8082
 ENTRYPOINT ["java", "-jar", "app.jar"]

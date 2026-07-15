@@ -7,6 +7,9 @@ import com.example.order_service.model.entity.OutboxEvent;
 import com.example.order_service.model.enums.OrderStatus;
 import com.example.order_service.repository.OrderRepository;
 import com.example.order_service.repository.OutboxEventRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.annotation.Observed;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,16 +27,30 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OutboxEventRepository outboxRepository;
     private final ObjectMapper objectMapper;
+    private final Counter ordersCreatedCounter;
+    private final Counter ordersCompletedCounter;
+    private final Counter ordersCancelledCounter;
 
     public OrderService(OrderRepository orderRepository,
                         OutboxEventRepository outboxRepository,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper,
+                        MeterRegistry meterRegistry) {
         this.orderRepository = orderRepository;
         this.outboxRepository = outboxRepository;
         this.objectMapper = objectMapper;
+        this.ordersCreatedCounter = Counter.builder("orders.created.total")
+                .description("Total orders created")
+                .register(meterRegistry);
+        this.ordersCompletedCounter = Counter.builder("orders.completed.total")
+                .description("Total orders completed successfully")
+                .register(meterRegistry);
+        this.ordersCancelledCounter = Counter.builder("orders.cancelled.total")
+                .description("Total orders cancelled")
+                .register(meterRegistry);
     }
 
     @Transactional
+    @Observed(name = "order.creation", contextualName = "create-order")
     public Long createOrder(CreateOrderRequest request) {
 
         // 1. Create Order
@@ -82,15 +99,21 @@ public class OrderService {
             throw new RuntimeException("Failed to create outbox event", e);
         }
 
+        ordersCreatedCounter.increment();
+        log.info("Order created successfully. orderId={}", savedOrder.getId());
         return savedOrder.getId();
     }
 
+    @Observed(name = "order.confirm", contextualName = "confirm-order")
     public void markOrderConfirmed(Long orderId) {
         updateStatus(orderId, OrderStatus.COMPLETED);
+        ordersCompletedCounter.increment();
     }
 
+    @Observed(name = "order.cancel", contextualName = "cancel-order")
     public void markOrderFailed(Long orderId) {
         updateStatus(orderId, OrderStatus.CANCELLED);
+        ordersCancelledCounter.increment();
     }
 
     private void updateStatus(Long orderId, OrderStatus status) {

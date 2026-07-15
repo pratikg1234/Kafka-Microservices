@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Data
 @NoArgsConstructor
@@ -14,9 +14,10 @@ import jakarta.validation.constraints.NotNull;
 @Builder
 public class PasswordResetRequest {
     
-    @NotNull(message = "User ID is required")
-    private String userId;
+    @NotBlank(message = "OTP code is required")
+    private String otpCode;
     
     @NotBlank(message = "New password is required")
+    @Size(min = 8, message = "Password must be at least 8 characters")
     private String newPassword;
 }

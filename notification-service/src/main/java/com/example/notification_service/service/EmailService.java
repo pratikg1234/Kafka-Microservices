@@ -5,7 +5,6 @@ import com.example.notification_service.repository.NotificationHistoryRepository
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -28,6 +27,34 @@ public class EmailService {
     @Value("${notification.from-email}")
     private String fromEmail;
     
+    public void sendWelcomeEmail(String toEmail, String username, String userId) {
+        log.info("Sending welcome email to: {}", toEmail);
+        
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("Welcome to Our Platform!");
+            
+            String htmlContent = buildWelcomeEmailTemplate(username);
+            helper.setText(htmlContent, true);
+            
+            mailSender.send(message);
+            
+            logNotification(userId, toEmail, NotificationHistory.NotificationType.welcome_email,
+                          NotificationHistory.NotificationStatus.sent, null);
+            
+            log.info("Welcome email sent successfully to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send welcome email to: {}", toEmail, e);
+            logNotification(userId, toEmail, NotificationHistory.NotificationType.welcome_email,
+                          NotificationHistory.NotificationStatus.failed, e.getMessage());
+            throw new RuntimeException("Failed to send welcome email", e);
+        }
+    }
+    
     public void sendOtpEmail(String toEmail, String otpCode, String userId) {
         log.info("Sending OTP email to: {}", toEmail);
         
@@ -46,13 +73,13 @@ public class EmailService {
             
             // Log in notification history
             logNotification(userId, toEmail, NotificationHistory.NotificationType.otp_email,
-                          NotificationHistory.NotificationStatus.sent);
+                          NotificationHistory.NotificationStatus.sent, null);
             
             log.info("OTP email sent successfully to: {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send OTP email to: {}", toEmail, e);
             logNotification(userId, toEmail, NotificationHistory.NotificationType.otp_email,
-                          NotificationHistory.NotificationStatus.failed);
+                          NotificationHistory.NotificationStatus.failed, e.getMessage());
             throw new RuntimeException("Failed to send OTP email", e);
         }
     }
@@ -75,15 +102,28 @@ public class EmailService {
             
             // Log in notification history
             logNotification(userId, toEmail, NotificationHistory.NotificationType.birthday_wish,
-                          NotificationHistory.NotificationStatus.sent);
+                          NotificationHistory.NotificationStatus.sent, null);
             
             log.info("Birthday wish email sent successfully to: {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send birthday wish email to: {}", toEmail, e);
             logNotification(userId, toEmail, NotificationHistory.NotificationType.birthday_wish,
-                          NotificationHistory.NotificationStatus.failed);
+                          NotificationHistory.NotificationStatus.failed, e.getMessage());
             throw new RuntimeException("Failed to send birthday wish email", e);
         }
+    }
+    
+    private String buildWelcomeEmailTemplate(String username) {
+        return "<!DOCTYPE html>" +
+                "<html>" +
+                "<body style='font-family: Arial, sans-serif;'>" +
+                "<h2>Welcome, " + username + "!</h2>" +
+                "<p>Thank you for registering with us. We're excited to have you on board!</p>" +
+                "<p>Your account has been created successfully. Please verify your account using the OTP sent separately.</p>" +
+                "<hr>" +
+                "<p style='color: #666; font-size: 12px;'>If you did not create this account, please contact support.</p>" +
+                "</body>" +
+                "</html>";
     }
     
     private String buildOtpEmailTemplate(String otpCode) {
@@ -117,12 +157,14 @@ public class EmailService {
     
     private void logNotification(String userId, String recipient, 
                                NotificationHistory.NotificationType type,
-                               NotificationHistory.NotificationStatus status) {
+                               NotificationHistory.NotificationStatus status,
+                               String errorMessage) {
         NotificationHistory history = NotificationHistory.builder()
                 .userId(userId)
                 .recipient(recipient)
                 .notificationType(type)
                 .status(status)
+                .errorMessage(errorMessage)
                 .attempts(1)
                 .sentAt(status == NotificationHistory.NotificationStatus.sent ? LocalDateTime.now() : null)
                 .build();

@@ -1,6 +1,5 @@
 package com.example.user_service.model.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -32,6 +31,6 @@ public class CreateUserRequest {
     private String phoneNumber;
     
     @NotNull(message = "Date of birth is required")
-    @PastOrPresent(message = "Date of birth must be in the past")
+    @Past(message = "Date of birth must be in the past")
     private LocalDate dateOfBirth;
 }

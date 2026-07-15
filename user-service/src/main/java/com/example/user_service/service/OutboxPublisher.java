@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,6 +23,29 @@ public class OutboxPublisher {
     
     @Autowired
     private ObjectMapper objectMapper;
+    
+    public void publishUserRegisteredEvent(String userId, String username, String email) {
+        log.info("Publishing USER_REGISTERED event for user: {}", userId);
+        
+        Map<String, String> payload = new HashMap<>();
+        payload.put("userId", userId);
+        payload.put("username", username);
+        payload.put("email", email);
+        
+        try {
+            OutboxEvent event = OutboxEvent.builder()
+                    .eventType(OutboxEvent.EventType.USER_REGISTERED)
+                    .aggregateId(userId)
+                    .payload(objectMapper.writeValueAsString(payload))
+                    .published(false)
+                    .build();
+            outboxEventRepository.save(event);
+            log.info("USER_REGISTERED event saved to outbox for user: {}", userId);
+        } catch (Exception e) {
+            log.error("Error publishing USER_REGISTERED event for user: {}", userId, e);
+            throw new RuntimeException("Failed to publish USER_REGISTERED event", e);
+        }
+    }
     
     public void publishOtpRequestedEvent(String userId, String email, String phoneNumber) {
         log.info("Publishing OTP_REQUESTED event for user: {}", userId);
@@ -38,35 +63,12 @@ public class OutboxPublisher {
                     .payload(objectMapper.writeValueAsString(payload))
                     .published(false)
                     .build();
-            log.info("show me the event type= {}", event.getEventType());
             outboxEventRepository.save(event);
 
             log.info("OTP_REQUESTED event saved to outbox for user: {}", userId);
         } catch (Exception e) {
             log.error("Error publishing OTP_REQUESTED event for user: {}", userId, e);
             throw new RuntimeException("Failed to publish OTP_REQUESTED event", e);
-        }
-    }
-    
-    public void publishUserRegisteredEvent(String userId) {
-        log.info("Publishing USER_REGISTERED event for user: {}", userId);
-        
-        Map<String, String> payload = new HashMap<>();
-        payload.put("userId", userId);
-        
-        try {
-            OutboxEvent event = OutboxEvent.builder()
-                    .eventType(OutboxEvent.EventType.USER_REGISTERED)
-                    .aggregateId(userId)
-                    .payload(objectMapper.writeValueAsString(payload))
-                    .published(false)
-                    .build();
-            
-            outboxEventRepository.save(event);
-            log.info("USER_REGISTERED event saved to outbox for user: {}", userId);
-        } catch (Exception e) {
-            log.error("Error publishing USER_REGISTERED event for user: {}", userId, e);
-            throw new RuntimeException("Failed to publish USER_REGISTERED event", e);
         }
     }
     
@@ -95,12 +97,16 @@ public class OutboxPublisher {
         }
     }
     
-    public void publishBirthdayWishEvent(String userId, String email) {
+    public void publishBirthdayWishEvent(String userId, String email, String username, LocalDate dateOfBirth) {
         log.info("Publishing BIRTHDAY_WISH_REQUESTED event for user: {}", userId);
         
-        Map<String, String> payload = new HashMap<>();
+        int age = Period.between(dateOfBirth, LocalDate.now()).getYears();
+        
+        Map<String, Object> payload = new HashMap<>();
         payload.put("userId", userId);
         payload.put("email", email);
+        payload.put("username", username);
+        payload.put("age", age);
         
         try {
             OutboxEvent event = OutboxEvent.builder()

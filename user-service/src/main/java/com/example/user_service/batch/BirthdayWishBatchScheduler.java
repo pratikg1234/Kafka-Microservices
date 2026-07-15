@@ -36,7 +36,8 @@ public class BirthdayWishBatchScheduler {
             
             for (User user : birthdayUsers) {
                 try {
-                    outboxPublisher.publishBirthdayWishEvent(user.getUserId(), user.getEmail());
+                    outboxPublisher.publishBirthdayWishEvent(
+                            user.getUserId(), user.getEmail(), user.getUsername(), user.getDateOfBirth());
                 } catch (Exception e) {
                     log.error("Failed to publish birthday wish event for user: {}", user.getUserId(), e);
                     // Continue with next user on error

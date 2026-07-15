@@ -61,7 +61,7 @@ public class NotificationHistory {
     }
     
     public enum NotificationType {
-        otp_email, otp_sms, birthday_wish, general
+        welcome_email, otp_email, otp_sms, birthday_wish, general
     }
     
     public enum NotificationStatus {

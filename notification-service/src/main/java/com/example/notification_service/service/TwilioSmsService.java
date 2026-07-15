@@ -5,6 +5,7 @@ import com.example.notification_service.repository.NotificationHistoryRepository
 import com.twilio.Twilio;
 import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,12 +31,16 @@ public class TwilioSmsService {
     @Value("${twilio.phone-number}")
     private String twilioPhoneNumber;
 
+    @PostConstruct
+    public void init() {
+        Twilio.init(accountSid, authToken);
+        log.info("Twilio client initialized successfully");
+    }
+
     public void sendOtpSms(String phoneNumber, String otpCode, String userId) {
         log.info("Sending OTP SMS to: {}", phoneNumber);
 
         try {
-            Twilio.init(accountSid, authToken);
-
             String messageBody =
                     "Your OTP code is: " + otpCode +
                             ". Valid for 2 minutes. Do not share this code with anyone.";
@@ -50,7 +55,8 @@ public class TwilioSmsService {
                     userId,
                     phoneNumber,
                     NotificationHistory.NotificationType.otp_sms,
-                    NotificationHistory.NotificationStatus.sent
+                    NotificationHistory.NotificationStatus.sent,
+                    null
             );
 
             log.info(
@@ -66,7 +72,8 @@ public class TwilioSmsService {
                     userId,
                     phoneNumber,
                     NotificationHistory.NotificationType.otp_sms,
-                    NotificationHistory.NotificationStatus.failed
+                    NotificationHistory.NotificationStatus.failed,
+                    e.getMessage()
             );
 
             throw new RuntimeException("Failed to send OTP SMS", e);
@@ -75,12 +82,14 @@ public class TwilioSmsService {
     
     private void logNotification(String userId, String recipient, 
                                NotificationHistory.NotificationType type,
-                               NotificationHistory.NotificationStatus status) {
+                               NotificationHistory.NotificationStatus status,
+                               String errorMessage) {
         NotificationHistory history = NotificationHistory.builder()
                 .userId(userId)
                 .recipient(recipient)
                 .notificationType(type)
                 .status(status)
+                .errorMessage(errorMessage)
                 .attempts(1)
                 .sentAt(status == NotificationHistory.NotificationStatus.sent ? LocalDateTime.now() : null)
                 .build();
