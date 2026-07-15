@@ -7,7 +7,7 @@ spring:
 
   data:
     mongodb:
-      uri: mongodb://host.docker.internal:27017/inventory_db
+      uri: mongodb://localhost:27017/inventory_db
 
   kafka:
     bootstrap-servers: localhost:9092

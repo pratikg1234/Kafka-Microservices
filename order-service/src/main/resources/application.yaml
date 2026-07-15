@@ -12,8 +12,8 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: update # if tables not created, it will create otherwise it updates
+    show-sql: true  # shows the sql related logs
 
   kafka:
     bootstrap-servers: localhost:9092
