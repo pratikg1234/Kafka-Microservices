@@ -6,6 +6,7 @@ import com.example.order_service.saga.entity.SagaExecution;
 import com.example.order_service.saga.repository.SagaExecutionRepository;
 import com.example.order_service.service.OrderService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -42,6 +43,7 @@ public class SagaOrchestrator {
      * Start a new saga for order creation
      */
     @Transactional
+    @Observed(name = "saga.execution", contextualName = "start-order-saga")
     public Long startOrderCreationSaga(CreateOrderRequest request) {
         log.info("Starting Saga for Order Creation");
 
@@ -85,6 +87,7 @@ public class SagaOrchestrator {
      * Handle inventory reservation success
      */
     @Transactional
+    @Observed(name = "saga.step.complete", contextualName = "handle-inventory-reserved")
     public void handleInventoryReserved(Long orderId, Long sagaId) {
         log.info("Inventory reserved successfully for OrderId: {}", orderId);
 
@@ -110,6 +113,7 @@ public class SagaOrchestrator {
      * Handle inventory reservation failure
      */
     @Transactional
+    @Observed(name = "saga.step.failure", contextualName = "handle-inventory-failed")
     public void handleInventoryReservationFailed(Long orderId, Long sagaId) {
         log.error("Inventory reservation failed for OrderId: {}", orderId);
 
